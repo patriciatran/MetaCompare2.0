@@ -13,10 +13,11 @@ COVG_OF_ALIGN_MGE = 0.9
 def generate_annotation(contig_file, out_dir, nthread = '64'):
 	sample_name = contig_file.split('/')[-1].split('.')[0]
 	prodigal_file = os.path.join(out_dir, sample_name + "_genes." + contig_file.split('/')[-1].split('.')[1]) 
+	prodigal_file_faa = os.path.join(out_dir, sample_name + "_proteins." + contig_file.split('/')[-1].split('.')[1]) 
 
 	if not os.path.exists(prodigal_file):
 		print("Running Prodigal")
-		subprocess.call(["pprodigal", "-i", contig_file, "-d", prodigal_file, "-p", "meta", "-C", "4000", "-T", "32", "-o", os.path.join(out_dir, "prodigal_log")])
+		subprocess.call(["pprodigal", "-i", contig_file, "-d", prodigal_file, "-a", prodigal_file_faa, "-p", "meta", "-C", "4000", "-T", "32", "-o", os.path.join(out_dir, "prodigal_log")])
 	else:
 		print("Skipping: Prodigal output already exists")
 
