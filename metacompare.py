@@ -19,19 +19,31 @@ if __name__ == '__main__':
     myargs = getopts(argv)
     
     if '-h' in myargs or len(myargs) == 0:  
-        print('\nUsage: ./metacompare.py -c filename1.fa [-t 64 -b 1 -s path_prefix -db path] \n')
+        print('\nUsage: ./metacompare.py -c filename1.fa [-t 64 -b 1 -s path_prefix -db_dir path] \n')
         print('\t-c: Specify FASTA file containing assembled contigs [required]')
         print('\t-t: Specify the number of threads (default: 64).')
         print('\t-b: Specify pipeline [0: both (default), 1: eco risk, 2: human risk].')
         print('\t-o: Output file path.')
         print('\t-s: Skip annotation. Provide the prefix/path to existing Prodigal files.')
-        print('\t-db: Path to the GTDB database for mmseqs.')
+        print('\t-db_dir: Path to the directory metacmpDB')
         print()
         exit()
 
-    # If the database path is not provided for the mmseq.sh script, we point to the old default location (which should be the same folder location as the data)
-    default_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metacmpDB/GTDB/gtdb")
-    db_path = myargs.get('-db', default_db)
+    # 1. Get the path directly from the user
+    # Default: looks for a folder named 'metacmpDB' in the current script directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    default_path = os.path.join(script_dir, "metacmpDB")
+    
+    # This now stores the direct path to the metacmpDB folder
+    metacmp_root = myargs.get('-db_dir', default_path)
+    
+    # 2. All resource files branch off this root directly
+    mge_len_file = os.path.join(metacmp_root, "MGE_len.txt")
+    pathogen_file = os.path.join(metacmp_root, "pathogen_list.txt")
+    eskape_file = os.path.join(metacmp_root, "eskape.txt")
+    
+    # For GTDB, it looks inside the GTDB sub-folder for the 'gtdb' file prefix
+    gtdb_path = os.path.join(metacmp_root, "GTDB/gtdb")
 
     nthread = myargs.get('-t', '64')
     out_dir = myargs.get('-o', '')
@@ -56,28 +68,26 @@ if __name__ == '__main__':
         # NOTE: You must update the signature of generate_annotation in annotation.py to accept this!
         annotated_data = generate_annotation(myargs['-c'], out_dir, nthread, db_path)    
     
-    # Pipeline execution...
+    # 1 = ecological only
     if pipeline == 1:        
         data_to_be_processed = [annotated_data[0], annotated_data[1], annotated_data[2]]
-        pathogens = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metacmpDB/pathogen_list.txt")
-        filtered_data = process_annotation(data_to_be_processed, mge_len_file, pathogens)
+        filtered_data = process_annotation(data_to_be_processed, mge_len_file, pathogen_file)
         result = calculate_score(myargs['-c'], filtered_data, pipeline)
+    # 2 = human risk score only
     elif pipeline == 2:        
         data_to_be_processed = [annotated_data[3], annotated_data[1], annotated_data[2]]
-        pathogens = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metacmpDB/eskape.txt")
-        filtered_data = process_annotation(data_to_be_processed, mge_len_file, pathogens)
+        filtered_data = process_annotation(data_to_be_processed, mge_len_file, eskape_file)
         result = calculate_score(myargs['-c'], filtered_data, pipeline)
+    # Both
     else:
         # Eco Risk
         data_to_be_processed_e = [annotated_data[0], annotated_data[1], annotated_data[2]]
-        pathogens_e = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metacmpDB/pathogen_list.txt")
-        filtered_data_e = process_annotation(data_to_be_processed_e, mge_len_file, pathogens_e)
+        filtered_data_e = process_annotation(data_to_be_processed_e, mge_len_file, pathogen_file)
         result_e = calculate_score(myargs['-c'], filtered_data_e, 1)
         
         # Human Risk
         data_to_be_processed_h = [annotated_data[3], annotated_data[1], annotated_data[2]]
-        pathogens_h = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metacmpDB/eskape.txt")
-        filtered_data_h = process_annotation(data_to_be_processed_h, mge_len_file, pathogens_h)
+        filtered_data_h = process_annotation(data_to_be_processed_h, mge_len_file, eskape_file)
         result_h = calculate_score(myargs['-c'], filtered_data_h, 2)
         
         result = pd.concat([result_e, result_h])
