@@ -11,6 +11,9 @@ MIN_ALIGN_LENGTH = 25
 COVG_OF_ALIGN_MGE = 0.9
 
 def generate_annotation(contig_file, out_dir, nthread='64', metacmp_db_path=None):
+    if not out_dir:
+        out_dir = './'
+
     sample_name = os.path.basename(contig_file).split('.')[0]
     ext = os.path.basename(contig_file).split('.')[-1]
     
