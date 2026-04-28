@@ -25,37 +25,34 @@ if __name__ == '__main__':
         print('\t-b: Specify pipeline [0: both (default), 1: eco risk, 2: human risk].')
         print('\t-o: Output file path.')
         print('\t-s: Skip annotation. Provide the prefix/path to existing Prodigal files.')
-        print('\t-db_dir: Path to the directory metacmpDB')
+        print('\t-db_dir: Path to the directory metacmpDB (e.g. /path/to/metacmpDB)')
         print()
         exit()
 
-    # 1. Get the path directly from the user
-    # Default: looks for a folder named 'metacmpDB' in the current script directory
+    # --- Setup Database Paths ---
     script_dir = os.path.dirname(os.path.abspath(__file__))
     default_path = os.path.join(script_dir, "metacmpDB")
     
-    # This now stores the direct path to the metacmpDB folder
+    # metacmp_root is the direct path to the metacmpDB folder
     metacmp_root = myargs.get('-db_dir', default_path)
     
-    # 2. All resource files branch off this root directly
     mge_len_file = os.path.join(metacmp_root, "MGE_len.txt")
     pathogen_file = os.path.join(metacmp_root, "pathogen_list.txt")
     eskape_file = os.path.join(metacmp_root, "eskape.txt")
-    
-    # For GTDB, it looks inside the GTDB sub-folder for the 'gtdb' file prefix
     gtdb_path = os.path.join(metacmp_root, "GTDB/gtdb")
 
     nthread = myargs.get('-t', '64')
     out_dir = myargs.get('-o', '')
     pipeline = int(myargs.get('-b', '0'))
     
-    mge_len_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metacmpDB/MGE_len.txt")
     sample_name = os.path.splitext(os.path.basename(myargs['-c']))[0]
     out_file = os.path.join(out_dir, sample_name + "_out.txt")    
     
+    # --- Annotation Step (Run or Skip) ---
     if '-s' in myargs:
-        print(f"Skipping annotation. Using prefix: {myargs['-s']}")
+        print(f"Skipping annotation. Using existing files with prefix: {myargs['-s']}")
         prefix = myargs['-s']
+        # We fill the list so downstream functions have the file paths they expect
         annotated_data = [
             f"{prefix}.gene.faa", 
             f"{prefix}.gene.fna", 
@@ -63,22 +60,19 @@ if __name__ == '__main__':
             f"{prefix}.renamed"   
         ]
     else:
-        print(f"Running annotation step using database at: {db_path}")
-        # 2. Pass db_path to the annotation function
-        # NOTE: You must update the signature of generate_annotation in annotation.py to accept this!
-        annotated_data = generate_annotation(myargs['-c'], out_dir, nthread, db_path)    
+        print(f"Running annotation step using database root: {metacmp_root}")
+        # Pass the database root so Diamond and MMseqs find their files
+        annotated_data = generate_annotation(myargs['-c'], out_dir, nthread, metacmp_root)
     
-    # 1 = ecological only
+    # --- Pipeline Execution ---
     if pipeline == 1:        
         data_to_be_processed = [annotated_data[0], annotated_data[1], annotated_data[2]]
         filtered_data = process_annotation(data_to_be_processed, mge_len_file, pathogen_file)
         result = calculate_score(myargs['-c'], filtered_data, pipeline)
-    # 2 = human risk score only
     elif pipeline == 2:        
         data_to_be_processed = [annotated_data[3], annotated_data[1], annotated_data[2]]
         filtered_data = process_annotation(data_to_be_processed, mge_len_file, eskape_file)
         result = calculate_score(myargs['-c'], filtered_data, pipeline)
-    # Both
     else:
         # Eco Risk
         data_to_be_processed_e = [annotated_data[0], annotated_data[1], annotated_data[2]]
@@ -93,3 +87,4 @@ if __name__ == '__main__':
         result = pd.concat([result_e, result_h])
     
     result.to_csv(out_file, header=True, index=None, sep="\t")
+    print(f"Done. Results saved to: {out_file}")
