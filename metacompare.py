@@ -19,16 +19,20 @@ if __name__ == '__main__':
     myargs = getopts(argv)
     
     if '-h' in myargs or len(myargs) == 0:  
-        print('\nUsage: ./metacompare.py -c filename1.fa [-t 64 -b 1 -s path_prefix] \n')
+        print('\nUsage: ./metacompare.py -c filename1.fa [-t 64 -b 1 -s path_prefix -db path] \n')
         print('\t-c: Specify FASTA file containing assembled contigs [required]')
-        print('\t-t: Specify the number of threads will be used in executing blast (default: 64).')
-        print('\t-b: Specify the pipeline to execute [0: both (default), 1: ecological risk score, 2: human health risk score ].')
+        print('\t-t: Specify the number of threads (default: 64).')
+        print('\t-b: Specify pipeline [0: both (default), 1: eco risk, 2: human risk].')
         print('\t-o: Output file path.')
         print('\t-s: Skip annotation. Provide the prefix/path to existing Prodigal files.')
+        print('\t-db: Path to the GTDB database for mmseqs.')
         print()
         exit()
 
-    # Default values
+    # If the database path is not provided for the mmseq.sh script, we point to the old default location (which should be the same folder location as the data)
+    default_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metacmpDB/GTDB/gtdb")
+    db_path = myargs.get('-db', default_db)
+
     nthread = myargs.get('-t', '64')
     out_dir = myargs.get('-o', '')
     pipeline = int(myargs.get('-b', '0'))
@@ -37,31 +41,28 @@ if __name__ == '__main__':
     sample_name = os.path.splitext(os.path.basename(myargs['-c']))[0]
     out_file = os.path.join(out_dir, sample_name + "_out.txt")    
     
-    # Logic to skip or run annotation
     if '-s' in myargs:
-        print(f"Skipping annotation. Using existing files with prefix: {myargs['-s']}")
-        # We simulate the return list of generate_annotation. 
-        # Typically these are paths to .faa, .fna, .gff, etc.
-        # Ensure these indices match what your generate_annotation function usually returns.
+        print(f"Skipping annotation. Using prefix: {myargs['-s']}")
         prefix = myargs['-s']
         annotated_data = [
-            f"{prefix}.gene.faa", # Index 0: proteins
-            f"{prefix}.gene.fna", # Index 1: nucleotide genes
-            f"{prefix}.gff",      # Index 2: coords
-            f"{prefix}.renamed"   # Index 3: specific for pipeline 2 if applicable
+            f"{prefix}.gene.faa", 
+            f"{prefix}.gene.fna", 
+            f"{prefix}.gff",      
+            f"{prefix}.renamed"   
         ]
     else:
-        print("Running annotation step...")
-        annotated_data = generate_annotation(myargs['-c'], out_dir, nthread)    
+        print(f"Running annotation step using database at: {db_path}")
+        # 2. Pass db_path to the annotation function
+        # NOTE: You must update the signature of generate_annotation in annotation.py to accept this!
+        annotated_data = generate_annotation(myargs['-c'], out_dir, nthread, db_path)    
     
-    # Pipeline execution
-	# Option 1 is ecological risk only, Option 2 is human risk score only. Otherwise, calculate both scores.
+    # Pipeline execution...
     if pipeline == 1:        
         data_to_be_processed = [annotated_data[0], annotated_data[1], annotated_data[2]]
         pathogens = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metacmpDB/pathogen_list.txt")
         filtered_data = process_annotation(data_to_be_processed, mge_len_file, pathogens)
         result = calculate_score(myargs['-c'], filtered_data, pipeline)
-	elif pipeline == 2:        
+    elif pipeline == 2:        
         data_to_be_processed = [annotated_data[3], annotated_data[1], annotated_data[2]]
         pathogens = os.path.join(os.path.dirname(os.path.abspath(__file__)), "metacmpDB/eskape.txt")
         filtered_data = process_annotation(data_to_be_processed, mge_len_file, pathogens)
@@ -82,4 +83,3 @@ if __name__ == '__main__':
         result = pd.concat([result_e, result_h])
     
     result.to_csv(out_file, header=True, index=None, sep="\t")
-    print(f"Results saved to {out_file}")
